@@ -1,0 +1,7 @@
+.calva/*
+.shadow-cljs/*
+.cpcache/*
+node_modules/*
+out/*
+.nrepl-port
+.DS_Store
