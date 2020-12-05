@@ -1,12 +1,13 @@
 (ns numpy-clj.core
   (:require
-   [clojure.core.matrix :as core]
+   [clojure.core.matrix :as mat]
    [clojure.core.matrix.implementations :as imp]
    ;;[clojure.core.matrix.linear :as li]
    [clojure.core.matrix.protocols :as proto]
    [clojure.core.protocols :refer [Datafiable]]
    [libpython-clj.python :refer [py. py.. py.-] :as py]
    [libpython-clj.require :refer [require-python]]
+   [libpython-clj.python.object :as obj]
    [numpy-clj.environment :refer [main!]]
    [numpy-clj.operators :as op]))
 
@@ -16,11 +17,20 @@
 (require-python '[numpy.linalg :as lin])
 (require-python '[scipy.linalg :as scilin])
 
+(defn validate-index [& indicies]
+  (cond
+    (not-every? false? (map neg? indicies))
+    (throw (Exception. (str "Error: invalid index " indicies)))))
+
+(defn valid-dimension? [ndims dim] #dbg
+  (tap> {:ndims ndims :dim dim :valid (or (< 0 dim) (> dim ndims))})
+    (or (<= 0 dim) (> dim ndims)))
+
 (extend-type (class (np/array [0 0]))
-  
+
   Datafiable
   (datafy [m]
-    (core/to-nested-vectors m))
+    (mat/to-nested-vectors m))
 
   ;; ====================================================================
   ;; MANDATORY PROTOCOLS FOR ALL IMPLEMENTATIONS
@@ -49,24 +59,33 @@
   (is-vector? [m]
     (= 1 (py.- m :ndim)))
   (dimension-count [m dimension-number]
-    (nth (np/shape m) dimension-number))
+    (case
+     (valid-dimension? (py.- m :ndim) dimension-number)
+      true (nth (np/shape m) dimension-number)
+      false (throw (Exception. (str "Error: dimension out of range " dimension-number)))))
 
   proto/PIndexedAccess
   (get-1d [m row]
+    (validate-index row)
     (py/get-item m [row]))
   (get-2d [m row column]
+    (validate-index row)
     (py/get-item m [row column]))
   (get-nd [m indexes]
+    (validate-index indexes)
     (py/get-item m (vec indexes)))
 
   proto/PIndexedSetting
   (set-1d [m row v]
+    (validate-index row)
     (let [copy (np/copy m)]
       (py/set-item! copy [row] v) copy))
   (set-2d [m row column v]
+    (validate-index row column)
     (let [copy (np/copy m)]
       (py/set-item! copy [row column] v) copy))
   (set-nd [m indexes v]
+    (validate-index indexes)
     (let [copy (np/copy m)]
       (py/set-item! copy (vec indexes) v) copy))
   (is-mutable? [m] true)
@@ -89,8 +108,8 @@
   ;; OPTIONAL PROTOCOLS
   proto/PZeroDimensionConstruction
   (new-scalar-array
-    ([m] 0)
-    ([m value] value))
+    ([m] (np/array 0))
+    ([m value] (np/array value)))
 
   proto/PSpecialisedConstructors
   (identity-matrix [m dims]
@@ -107,22 +126,48 @@
       (vector? param)
       (np/array (py/->py-list param))
 
-      :else (np/array (core/to-nested-vectors (py/->py-list param)))))
+      :else (np/array (mat/to-nested-vectors (py/->py-list param)))))
+
+;;   proto/PConversion
+;;   (convert-to-nested-vectors [m]
+    ;; (obj/python->jvm-copy-persistent-vector m))
 
 ;;   proto/PReshaping
 ;;   (reshape [m shape]
 ;;     (np/reshape m shape))
 
+  proto/PMatrixRows
+  (get-rows [m]
+    (builtins/list (builtins/iter m)))
+
+  proto/PMatrixColumns
+  (get-columns [m]
+    (builtins/list (builtins/iter (np/transpose m))))
+
   ;; ============================================================
   ;; Equality operations
 
-;;   proto/PValueEquality
-;;   (value-equals [m a]
-;;     (np/array_equal m a))
+  proto/PValueEquality
+  (value-equals [m a]
+    (let [v1 (mat/eseq m)
+          v2 (mat/eseq a)
+          sh-eq? (mat/same-shape? m a)
+          val-eq? (every? true?
+                          (for [[a b] (map vector v1 v2)]
+                            (= a b)))]
+      (every? true? [sh-eq? val-eq?]))
+    #_(np/all (op/== m a)))
 
-;;   proto/PMatrixEquality
-;;   (matrix-equals [a b]
-;;     (np/array_equal a b))
+  proto/PMatrixEquality
+  (matrix-equals [a b]
+    (let [v1 (mat/eseq a)
+          v2 (mat/eseq b)
+          sh-eq? (mat/same-shape? a b)
+          val-eq? (every? true?
+                          (for [[a b] (map vector v1 v2)]
+                            (== a b)))]
+      (every? true? [sh-eq? val-eq?]))
+    #_(np/all (op/== a b)))
 
 ;;   proto/PMatrixEqualityEpsilon
 ;;   (matrix-equals-epsilon [a b eps]
@@ -186,6 +231,17 @@
     (op/+= m a))
   (matrix-sub! [m a]
     (op/-= m a))
+
+  proto/PSubMatrix
+  (submatrix [d dim-ranges]
+    ;; [[start len]]
+    ;; [start:(start+length), ...]
+    (let [inds (vec
+                (for [[start len] dim-ranges]
+                  (builtins/slice start (if (nil? len)
+                                          (obj/py-none)
+                                          (+ start len)))))]
+      (py/get-item d inds)))
 
   proto/PTranspose
   (transpose [m]
@@ -289,7 +345,8 @@
     (np/clip m a b))
 
 ;;   proto/PCompare
-;;   (element-compare [a b])
+;;   (element-compare [a b]
+;;     (np/equal a b))
 ;;   (element-if [m a b])
 ;;   (element-lt [m a])
 ;;   (element-le [m a])
@@ -312,6 +369,31 @@
 ;;   (element-reduce
 ;;     ([m f])
 ;;     ([m f init]))
+
+  proto/PGenericValues
+  (generic-zero [m]
+    (py/->py-float 0))
+  (generic-one [m]
+    (py/->py-float 1))
+  (generic-value [m]
+    (py/->py-float 0))
+
+  proto/PGenericOperations
+  (generic-add [m] op/+)
+  (generic-mul [m] op/*)
+  (generic-negate [m] op/-)
+  (generic-div [m] op//)
+
+  ;; ===========================================================
+  ;; Protocols for higher-level array indexing
+
+  proto/PSelect
+  (select [a args]
+    (py/get-item a (apply np/ix_ args)))
+
+  proto/PSelectView
+  (select-view [a args]
+    (py/get-item a (apply np/ix_ args)))
 
   ;; =========================================
   ;; LINEAR ALGEBRA PROTOCOLS
@@ -355,4 +437,20 @@
 
 (def cannonical-object (np/array [0 0]))
 (imp/register-implementation :numpy-clj cannonical-object)
-(core/set-current-implementation :numpy-clj)
+(mat/set-current-implementation :numpy-clj)
+
+
+(comment
+ (let [m1 (np/array [[0 1 2]])
+       m2 (np/array [0 1 2])
+       v1 (mat/eseq m1)
+       v2 (mat/eseq m2)
+       sh-eq? (mat/same-shape? m1 m2)
+       val-eq? (every? true?
+                       (for [[a b] (map vector v1 v2)]
+                         (== a b)))]
+   #break
+   (every? true? [sh-eq? val-eq?]))
+  (map == (mat/eseq (np/array [0 1])))
+  (obj/python->jvm-copy-persistent-vector (np/array [[0 1 2] [3 4 5]]))
+  (np/all (np/equal (np/array [[0 1]]) (np/array [[0 1]]))))
