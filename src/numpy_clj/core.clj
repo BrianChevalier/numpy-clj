@@ -22,8 +22,8 @@
     (not-every? false? (map neg? indicies))
     (throw (Exception. (str "Error: invalid index " indicies)))))
 
-(defn valid-dimension? [ndims dim] #dbg
-  (tap> {:ndims ndims :dim dim :valid (or (< 0 dim) (> dim ndims))})
+(defn valid-dimension? [ndims dim]
+  ;;(tap> {:ndims ndims :dim dim :valid (or (< 0 dim) (> dim ndims))})
     (or (<= 0 dim) (> dim ndims)))
 
 (extend-type (class (np/array [0 0]))
@@ -31,6 +31,24 @@
   Datafiable
   (datafy [m]
     (mat/to-nested-vectors m))
+
+  ;;ASeq
+  ;; clojure.lang.ISeq
+  ;; (-first [m]
+  ;;   (-> m
+  ;;       .toArray
+  ;;       js->clj
+  ;;       first))
+  ;; (-rest [m]
+  ;;   (-> m
+  ;;       .toArray
+  ;;       js->clj
+  ;;       rest)
+    ;; #_(let [nRows (-> m .size first)]
+    ;;     (for [row (range 1 nRows)]
+    ;;       (-> (m/row m row)
+    ;;           .toArray
+    ;;           js->clj))))
 
   ;; ====================================================================
   ;; MANDATORY PROTOCOLS FOR ALL IMPLEMENTATIONS
@@ -126,15 +144,33 @@
       (vector? param)
       (np/array (py/->py-list param))
 
-      :else (np/array (mat/to-nested-vectors (py/->py-list param)))))
+      :else (-> param
+                mat/to-nested-vectors
+                np/array)))
+
+  proto/PBroadcast
+  (broadcast [m target-shape]
+    (np/broadcast_to m target-shape))
 
 ;;   proto/PConversion
 ;;   (convert-to-nested-vectors [m]
-    ;; (obj/python->jvm-copy-persistent-vector m))
+;;     (obj/python->jvm-copy-persistent-vector m))
 
-;;   proto/PReshaping
-;;   (reshape [m shape]
-;;     (np/reshape m shape))
+  proto/PReshaping
+  (reshape [m shape]
+    (np/reshape m shape))
+
+  proto/PMatrixSlices
+  (get-row [m i] ;; A[i, :]
+    (py/get-item m [i]))
+  (get-column [m i] ;; A[:, i]
+    (py/get-item m [(builtins/slice 0 nil) i]))
+  (get-major-slice [m i] ;; A[i, :, :, ...]
+    (py/get-item m [i (builtins/slice 0 nil)]))
+  (get-slice [m dimension i] ;; A[:, :, ..., i, ..., :]
+    (py/get-item m
+                 (vec (for [j (range (mat/dimensionality m))]
+                        (if (== j dimension) i (builtins/slice 0 nil))))))
 
   proto/PMatrixRows
   (get-rows [m]
@@ -143,6 +179,18 @@
   proto/PMatrixColumns
   (get-columns [m]
     (builtins/list (builtins/iter (np/transpose m))))
+
+  proto/PSliceView
+  (get-major-slice-view [m i]
+    (py/get-item m [i (builtins/slice 0 nil)]))
+
+  proto/PSubVector
+  (subvector [m start length]
+    (py/get-item m [(builtins/slice start (+ start length))]))
+
+  proto/PMatrixSubComponents
+  (main-diagonal [m]
+    (np/diag m))
 
   ;; ============================================================
   ;; Equality operations
@@ -255,17 +303,26 @@
   (length-squared [a]
     (op/** (lin/norm a) 2))
   (normalise [a]
-    (op// a (lin/norm a)))
+    (op// (py. a :astype "float64") (lin/norm a)))
 
   proto/PVectorCross
   (cross-product [a b]
     (np/cross a b))
   (cross-product! [a b]
-    (np/cross a b))
+    (let [;;copy (np/copy a)
+          cross (np/cross a b)]
+      (py/set-attr! a :dtype "float64")
+      (np/copyto a cross)))
 
   proto/PMutableVectorOps
   (normalise! [a]
-    (op/idiv a (lin/norm a)))
+    (let [b (np/copy a)
+          len (lin/norm a)]
+      ;; changing dtype in place has weird behavior
+      ;; need to copy back original data!
+      (py/set-attr! a :dtype "float64")
+      (np/copyto a b)
+      (op/idiv a len)))
 
   proto/PMatrixOps
   (trace [m]
@@ -355,20 +412,25 @@
 ;;   (element-ne [m a])
 ;;   (element-eq [m a])
 
-;;   proto/PFunctionalOperations
-;;   (element-seq [m]
-;;     (py. m :flatten))
-;;   (element-map
-;;     ([m f] (map f m))
-;;     ([m f a])
-;;     ([m f a more]))
-;;   (element-map!
-;;     ([m f])
-;;     ([m f a])
-;;     ([m f a more]))
-;;   (element-reduce
-;;     ([m f])
-;;     ([m f init]))
+  proto/PFunctionalOperations
+  (element-seq [m]
+    (obj/python->jvm-copy-persistent-vector (py. m :flatten)))
+  (element-map
+    ([m f]
+     (map f (mat/eseq m)))
+    ([m f a]
+     (map f (mat/eseq m) a))
+    ([m f a more]
+     (apply map f (mat/eseq m) a more)))
+  ;; (element-map!
+  ;;   ([m f])
+  ;;   ([m f a])
+  ;;   ([m f a more]))
+  (element-reduce
+    ([m f]
+     (reduce f (mat/eseq m)))
+    ([m f init]
+     (reduce f init (mat/eseq m))))
 
   proto/PGenericValues
   (generic-zero [m]
@@ -439,18 +501,3 @@
 (imp/register-implementation :numpy-clj cannonical-object)
 (mat/set-current-implementation :numpy-clj)
 
-
-(comment
- (let [m1 (np/array [[0 1 2]])
-       m2 (np/array [0 1 2])
-       v1 (mat/eseq m1)
-       v2 (mat/eseq m2)
-       sh-eq? (mat/same-shape? m1 m2)
-       val-eq? (every? true?
-                       (for [[a b] (map vector v1 v2)]
-                         (== a b)))]
-   #break
-   (every? true? [sh-eq? val-eq?]))
-  (map == (mat/eseq (np/array [0 1])))
-  (obj/python->jvm-copy-persistent-vector (np/array [[0 1 2] [3 4 5]]))
-  (np/all (np/equal (np/array [[0 1]]) (np/array [[0 1]]))))
