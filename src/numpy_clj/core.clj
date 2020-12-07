@@ -23,7 +23,6 @@
     (throw (Exception. (str "Error: invalid index " indicies)))))
 
 (defn valid-dimension? [ndims dim]
-  ;;(tap> {:ndims ndims :dim dim :valid (or (< 0 dim) (> dim ndims))})
     (or (<= 0 dim) (> dim ndims)))
 
 (defn ix_
@@ -37,32 +36,13 @@
      (for [[a b] (map vector args ix)]
        (if (number? a) a b)))))
 
-;; (defn select [a args]
-;;   (py/get-item a (ix_ args)))
+(def cannonical-object (np/array [0 0]))
 
-(extend-type (class (np/array [0 0]))
+(extend-type (class cannonical-object)
 
   Datafiable
   (datafy [m]
     (mat/to-nested-vectors m))
-
-  ;;ASeq
-  ;; clojure.lang.ISeq
-  ;; (-first [m]
-  ;;   (-> m
-  ;;       .toArray
-  ;;       js->clj
-  ;;       first))
-  ;; (-rest [m]
-  ;;   (-> m
-  ;;       .toArray
-  ;;       js->clj
-  ;;       rest)
-    ;; #_(let [nRows (-> m .size first)]
-    ;;     (for [row (range 1 nRows)]
-    ;;       (-> (m/row m row)
-    ;;           .toArray
-    ;;           js->clj))))
 
   ;; ====================================================================
   ;; MANDATORY PROTOCOLS FOR ALL IMPLEMENTATIONS
@@ -197,7 +177,8 @@
   proto/PSliceView
   (get-major-slice-view [m i]
     ;; A[i, :]
-    (py/get-item m [i (builtins/slice 0 nil)]))
+    (tap> {:m m :i i})
+    (py/get-item m [i]))
 
   proto/PSliceView2
   (get-slice-view [m dim i]
@@ -223,8 +204,6 @@
 
   proto/PAssignment
   (assign! [m source]
-    (println m)
-    (tap> {:m m :source source})
     (np/copyto m source))
 
   (assign-array!
@@ -265,8 +244,6 @@
 
 ;;   proto/PMatrixEqualityEpsilon
 ;;   (matrix-equals-epsilon [a b eps]
-;;                          (println ">>>>>>>>")
-;;                          (println (str a " " b  " " eps))
 ;;     (np/allclose a b :atol (py/->py-float eps)))
 
   ;; ====================================================================
@@ -463,16 +440,15 @@
     (obj/python->jvm-copy-persistent-vector (py. m :flatten)))
   (element-map
     ([m f]
-     ((np/vectorize f) m) #_(map f (mat/eseq m)))
-    ;; ([m f a]
-    ;;  (map f (mat/eseq m) a))
-    ;; ([m f a more]
-    ;;  (apply map f (mat/eseq m) a more)))
+     ((np/vectorize f) m))
+    ([m f a]
+     ((np/vectorize f) m a))
+    ([m f a more]
+     ((np/vectorize f) m a more)))
   ;; (element-map!
   ;;   ([m f])
   ;;   ([m f a])
-  ;;   ([m f a more])
-    )
+  ;;   ([m f a more]))
   (element-reduce
     ([m f]
      (reduce f (mat/eseq m)))
@@ -575,6 +551,5 @@
   (least-squares [a b]
     (lin/lstsq a b)))
 
-(def cannonical-object (np/array [0 0]))
 (imp/register-implementation :numpy-clj cannonical-object)
 (mat/set-current-implementation :numpy-clj)
