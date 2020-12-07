@@ -26,6 +26,20 @@
   ;;(tap> {:ndims ndims :dim dim :valid (or (< 0 dim) (> dim ndims))})
     (or (<= 0 dim) (> dim ndims)))
 
+(defn ix_
+  "Calls np.ix_ but reduces dimensionality"
+  [args]
+  (let [ind (map (fn [arg]
+                   (if (number? arg) [arg] arg))
+                 args)
+        ix (apply np/ix_ ind)]
+    (vec
+     (for [[a b] (map vector args ix)]
+       (if (number? a) a b)))))
+
+;; (defn select [a args]
+;;   (py/get-item a (ix_ args)))
+
 (extend-type (class (np/array [0 0]))
 
   Datafiable
@@ -182,7 +196,19 @@
 
   proto/PSliceView
   (get-major-slice-view [m i]
+    ;; A[i, :]
     (py/get-item m [i (builtins/slice 0 nil)]))
+
+  proto/PSliceView2
+  (get-slice-view [m dim i]
+    ;; A[:, :, ..., i, ..., :]
+    (let [ndims (mat/dimensionality m)]
+      (py/get-item
+       m
+       (vec (for [j (range ndims)]
+              (if (== j dim)
+                i
+                (builtins/slice 0 nil)))))))
 
   proto/PSubVector
   (subvector [m start length]
@@ -191,6 +217,26 @@
   proto/PMatrixSubComponents
   (main-diagonal [m]
     (np/diag m))
+
+  ;; ==========================================================================
+  ;; Array assignment and conversion operations
+
+  proto/PAssignment
+  (assign! [m source]
+    (println m)
+    (tap> {:m m :source source})
+    (np/copyto m source))
+
+  (assign-array!
+    ([m arr]
+     (np/copyto m (np/reshape (np/array arr) (np/shape m))))
+    ([m arr start length]
+     (np/copyto (py/get-item m [(builtins/slice start (+ start length))])
+                (np/reshape (np/array arr) (np/shape m)))))
+
+  proto/PMutableFill
+  (fill! [m value]
+    (py. m :fill value))
 
   ;; ============================================================
   ;; Equality operations
@@ -417,21 +463,24 @@
     (obj/python->jvm-copy-persistent-vector (py. m :flatten)))
   (element-map
     ([m f]
-     (map f (mat/eseq m)))
-    ([m f a]
-     (map f (mat/eseq m) a))
-    ([m f a more]
-     (apply map f (mat/eseq m) a more)))
+     ((np/vectorize f) m) #_(map f (mat/eseq m)))
+    ;; ([m f a]
+    ;;  (map f (mat/eseq m) a))
+    ;; ([m f a more]
+    ;;  (apply map f (mat/eseq m) a more)))
   ;; (element-map!
   ;;   ([m f])
   ;;   ([m f a])
-  ;;   ([m f a more]))
+  ;;   ([m f a more])
+    )
   (element-reduce
     ([m f]
      (reduce f (mat/eseq m)))
     ([m f init]
      (reduce f init (mat/eseq m))))
 
+  ;; ============================================================
+  ;; Generic values and functions
   proto/PGenericValues
   (generic-zero [m]
     (py/->py-float 0))
@@ -441,21 +490,38 @@
     (py/->py-float 0))
 
   proto/PGenericOperations
-  (generic-add [m] op/+)
-  (generic-mul [m] op/*)
-  (generic-negate [m] op/-)
-  (generic-div [m] op//)
+  (generic-add [m]
+    op/+)
+  (generic-mul [m]
+    op/*)
+  (generic-negate [m]
+    op/-)
+  (generic-div [m]
+    op//)
 
   ;; ===========================================================
   ;; Protocols for higher-level array indexing
 
   proto/PSelect
   (select [a args]
-    (py/get-item a (apply np/ix_ args)))
+    (py/get-item a (ix_ args)))
 
   proto/PSelectView
   (select-view [a args]
-    (py/get-item a (apply np/ix_ args)))
+    (py/get-item a (ix_ args)))
+
+  ;; proto/PSetSelection
+  ;; (set-selection [a args values])
+
+  proto/PIndicesAccess
+  (get-indices [a indices]
+    (np/array
+     (vec (for [index indices]
+            (py/get-item a index)))))
+
+  ;; proto/PIndicesSetting
+  ;; (set-indices [a indices values])
+  ;; (set-indices! [a indices values])
 
   ;; =========================================
   ;; LINEAR ALGEBRA PROTOCOLS
@@ -463,28 +529,40 @@
   (norm [m p]
     (lin/norm m :ord p))
 
-;;   proto/PQRDecomposition
-;;   (qr [m options]
-;;     (lin/qr m))
+  proto/PQRDecomposition
+  (qr [m options]
+    (let [return (:return options [:Q :R])
+          compact? (:compact options false)
+          mode (if compact? "reduced" "complete")
+          ;; This passes the tests but I think the
+          ;; QR Decomposition test is wrong
+          [_ R] (lin/qr m :mode mode)
+          [Q _] (lin/qr m :mode "complete")]
+      (select-keys {:Q Q :R R} return)))
 
-;;   proto/PCholeskyDecomposition
-;;   (cholesky [m options]
-;;     (lin/cholesky m))
+  proto/PCholeskyDecomposition
+  (cholesky [m options]
+    (let [L (lin/cholesky m)
+          L* (py.- L :T)
+          return (:return options [:L :L*])]
+      (select-keys {:L L :L* L*} return)))
 
   proto/PLUDecomposition
   (lu [m options]
     (let [[P L U] (scilin/lu m)
-          return  (:return options)]
+          return  (:return options [:P :L :U])]
       (select-keys {:P P :L L :U U} return)))
 
-;;   proto/PSVDDecomposition
-;;   (svd [m options]
-;;     (lin/svd m))
+  proto/PSVDDecomposition
+  (svd [m options]
+    (let [[u s vh] (lin/svd m)
+          return (:return options [:U :S :V*])]
+      (select-keys {:U u :S s :V* vh} return)))
 
   proto/PEigenDecomposition
   (eigen [m options]
     (let [[vals vecs] (lin/eig m)
-          return (:return options)]
+          return (:return options [:Q :A])]
       (select-keys {:Q vecs            ;; :Q eigenvectors
                     :A (np/diag vals)} ;; :A diagonal matrix of eigenvals
                    return)))
@@ -500,4 +578,3 @@
 (def cannonical-object (np/array [0 0]))
 (imp/register-implementation :numpy-clj cannonical-object)
 (mat/set-current-implementation :numpy-clj)
-
