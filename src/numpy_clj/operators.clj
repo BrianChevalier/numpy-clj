@@ -2,13 +2,24 @@
   "Wraps the Python special methods
    ex: (+ a b) will do a.__add__(b)"
   (:refer-clojure :exclude [+ - * / < <= == >= >])
-  (:require [libpython-clj.python :refer [py.] :as py]))
+  (:require 
+   [libpython-clj.require :refer [require-python]]
+   [libpython-clj.python :refer [py.] :as py]))
+
+(require-python '[numpy :as np])
 
 (defn ->py [a]
   a #_(cond
     (type 2)   (py/->py-long a)
     (type 2.0) (py/->py-float a)
     :else a))
+
+#_(defn change-array-type! [m]
+  (println m)
+  m
+  #_(let [copy (np/copy m)]
+    (py/set-attr! m :dtype "float64")
+    (np/copyto m copy)))
 
 ;; Binary Operators
 (defn +
@@ -32,13 +43,13 @@
 
 ;; Extended Assignment
 (defn +=
-  ([a b] (py. a :__iadd__ b)))
+  ([a b] (np/add a b :out a :casting "unsafe") #_(py. (change-array-type! a) :__iadd__ b)))
 (defn -=
   ([a b] (py. a :__isub__ b)))
 (defn *=
-  ([a b] (py. a :__imul__ b)))
+  ([a b] (np/multiply a b :out a :casting "unsafe") #_(py. (change-array-type! a) :__imul__ b)))
 (defn idiv
-  ([a b] (py. a :__itruediv__ b)))
+  ([a b] (np/divide a b :out a :casting "unsafe")#_(py. (change-array-type! a) :__itruediv__ b)))
 (defn ifloordiv
   ([a b] (py. a :__ifloordiv__ b)))
 (defn immul
