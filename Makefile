@@ -18,7 +18,7 @@ target/install-clojure:
 	chmod +x target/install-clojure
 
 install/clojure: target/install-clojure
-	./target/install-clojure
+	sudo ./target/install-clojure
 
 install/conda:
 	mkdir -p ~/miniconda3
