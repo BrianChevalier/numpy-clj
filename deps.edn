@@ -8,6 +8,11 @@
  {:core-matrix
   {:override-deps
    {net.mikera/core.matrix
+    {:git/url "https://github.com/BrianChevalier/core.matrix"
+     :sha "472ac44d2a59fbe2daf6ae5d80b97b3f6202d465"}}}
+  :local-deps
+  {:override-deps
+   {net.mikera/core.matrix
     {:local/root "../core.matrix"
      :deps/manifest :deps}}}
   :dev
