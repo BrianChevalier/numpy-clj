@@ -8,6 +8,7 @@ env:
 	#pip install numpy scipy
 	#conda create -n numpy_clj_testenv python=3.8 numpy scipy=1.5.2
 	conda install python=3.7 numpy scipy=1.5.2
+	pip install numpy scipy
 
 test:
 	clojure -M:core-matrix -m numpy-clj.compliance-test
