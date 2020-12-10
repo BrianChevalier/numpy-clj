@@ -1,17 +1,18 @@
 (ns numpy-clj.core
-  (:require
-   [clojure.core.matrix :as mat]
-   [clojure.core.matrix.implementations :as imp]
-   ;;[clojure.core.matrix.linear :as li]
-   [clojure.core.matrix.protocols :as proto]
-   [clojure.core.protocols :refer [Datafiable]]
-   [libpython-clj.python :refer [py. py.. py.-] :as py]
-   [libpython-clj.require :refer [require-python]]
-   [libpython-clj.python.object :as obj]
-   [numpy-clj.environment :refer [main!]]
-   [numpy-clj.operators :as op]))
+  (:require numpy-clj.environment))
 
-(main!)
+(numpy-clj.environment/main!)
+
+(require
+ '[clojure.core.matrix :as mat]
+ '[clojure.core.matrix.implementations :as imp]
+ '[clojure.core.matrix.protocols :as proto]
+ '[clojure.core.protocols :refer [Datafiable]]
+ '[libpython-clj.python :refer [py. py.. py.-] :as py]
+ '[libpython-clj.require :refer [require-python]]
+ '[libpython-clj.python.object :as obj]
+ '[numpy-clj.operators :as op])
+
 (require-python '[numpy :as np])
 (require-python '[builtins])
 (require-python '[numpy.linalg :as lin])
