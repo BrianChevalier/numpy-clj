@@ -20,5 +20,20 @@ jobs:
     - uses: actions/setup-java@v1
       with:
         java-version: '1.8'
-    - run: sudo apt-get update && sudo apt-get install make
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+    - uses: actions/cache@v2
+      with:
+        # This path is specific to Ubuntu
+        path: ~/.cache/pip
+        # Look to see if there is a cache hit for the corresponding requirements file
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          ${{ runner.os }}-
+    - uses: DeLaGuardo/setup-clojure@master
+      with:
+        # To use Clojure CLI 1.10.1.561 based on tools.deps
+        cli: '1.10.1.469'
     - run: make ci
