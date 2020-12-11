@@ -1,10 +1,12 @@
 # numpy-clj
 
-## About
-
 [![Build Status](https://github.com/brianchevalier/numpy-clj/workflows/Clojure%20CI/badge.svg)](https://github.com/BrianChevalier/numpy-clj/actions?query=workflow%3A%22Clojure+CI%22)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/BrianChevalier/core.matrix-examples/main?urlpath=lab/tree/Notebooks)
+
 
 A Clojure [core.matrix](https://github.com/mikera/core.matrix) implementation using [NumPy](https://github.com/numpy/numpy) via [libpython-clj](https://github.com/clj-python/libpython-clj). `numpy-clj` allows you to use an idiomatic Clojure library, while still interoperating with Numpy, SciPy and the entire Python ecosystem.
+
+Try out `numpy-clj` in JupyterLab via Binder along with other `core.matrix` implementations. [Click here](https://mybinder.org/v2/gh/BrianChevalier/core.matrix-examples/main?urlpath=lab/tree/Notebooks) or click the 'launch binder' badge above.
 
 ## Usage
 
