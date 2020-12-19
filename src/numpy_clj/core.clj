@@ -252,7 +252,7 @@
 
   proto/PMatrixMultiply
   (matrix-multiply [m a]
-    (op/mmul m a))
+    (np/dot m a))
   (element-multiply [m a]
     (op/* m a))
 
@@ -264,8 +264,10 @@
 
   proto/PMatrixDivide
   (element-divide
-    ([m] (np/reciprocal m))
-    ([m a] (op// m a)))
+    ([m]
+     (np/reciprocal m))
+    ([m a]
+     (op// m a)))
 
   proto/PMatrixDivideMutable
   (element-divide!
@@ -425,16 +427,22 @@
   (element-clamp [m a b]
     (np/clip m a b))
 
-;;   proto/PCompare
-;;   (element-compare [a b]
-;;     (np/equal a b))
-;;   (element-if [m a b])
-;;   (element-lt [m a])
-;;   (element-le [m a])
-;;   (element-gt [m a])
-;;   (element-ge [m a])
-;;   (element-ne [m a])
-;;   (element-eq [m a])
+  proto/PCompare
+  #_(element-compare [a b]
+                     (np/equal a b))
+  ;; (element-if [m a b])
+  (element-lt [m a]
+    (np/less m a :dtype "int"))
+  (element-le [m a]
+    (np/less_equal m a :dtype "int"))
+  (element-gt [m a]
+    (np/greater m a :dtype "int"))
+  (element-ge [m a]
+    (np/greater_equal m a :dtype "int"))
+  (element-ne [m a]
+    (np/not_equal m a :dtype "int"))
+  (element-eq [m a]
+    (np/equal m a :dtype "int"))
 
   proto/PFunctionalOperations
   (element-seq [m]
@@ -455,6 +463,27 @@
      (reduce f (mat/eseq m)))
     ([m f init]
      (reduce f init (mat/eseq m))))
+
+  proto/PMatrixTypes
+  (diagonal? [m]
+    (np/all (np/equal m (np/diag (np/diagonal m)))))
+  (upper-triangular? [m]
+    (np/all (np/equal m (np/triu m))))
+  (lower-triangular? [m]
+    (np/all (np/equal m (np/tril m))))
+  (positive-definite? [m]
+    (np/all (np/greater (lin/eigvals m))))
+  (positive-semidefinite? [m]
+    (np/all (np/greater_equal (lin/eigvals m))))
+  (orthogonal? [m eps]
+    (let [square? (mat/square? m)
+          matrix? (mat/matrix? m)]
+      (cond
+        (and square? matrix?)
+        (let [I (mat/identity-matrix (mat/row-count m))
+              A (mat/mmul m (mat/transpose (np/copy m)))] ;; for some reason a copy is necessary
+          (np/allclose A I :atol eps))
+        :else   false)))
 
   ;; ============================================================
   ;; Generic values and functions

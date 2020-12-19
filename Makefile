@@ -8,7 +8,7 @@ env:
 	pip install -r requirements.txt
 
 test:
-	clojure -M:core-matrix -m numpy-clj.compliance-test
+	clojure -M:core-matrix -m numpy-clj.test-runner
 
 target/install-clojure:
 	mkdir -p target
