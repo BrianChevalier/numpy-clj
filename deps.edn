@@ -14,6 +14,9 @@
    {net.mikera/core.matrix
     {:local/root "../core.matrix"
      :deps/manifest :deps}}}
+  :kondo
+  {:main-opts ["-m" "clj-kondo.main"]
+   :extra-deps {clj-kondo/clj-kondo {:mvn/version "2020.12.12"}}}
   :dev
   {:extra-paths ["dev"]
    :extra-deps

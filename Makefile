@@ -11,8 +11,7 @@ test:
 	clojure -M:core-matrix -m numpy-clj.test-runner
 
 lint:
-	clj-kondo --lint src
-	clj-kondo --lint test
+	clojure -M:kondo --lint dev src test
 
 target/install-clojure:
 	mkdir -p target
@@ -22,13 +21,7 @@ target/install-clojure:
 install/clojure: target/install-clojure
 	sudo ./target/install-clojure
 
-install/lint:
-	curl -sLO https://raw.githubusercontent.com/borkdude/clj-kondo/master/script/install-clj-kondo
-	chmod +x install-clj-kondo
-	./install-clj-kondo
-	rm install-clj-kondo
-
-install: install/clojure install/lint
+install: install/clojure
 
 target: target/install-clojure
 
