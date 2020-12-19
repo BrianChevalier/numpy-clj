@@ -1,0 +1,4 @@
+{:lint-as {libpython-clj.require/require-python clojure.core/require}
+ :linters {:unused-referred-var {:exclude {clojure.test [is deftest run-tests testing]}}
+           :unused-namespace {:exclude [numpy-clj.core]}
+           :unsorted-required-namespace {:level :warning}}}

@@ -8,30 +8,17 @@
 
 (require-python '[numpy :as np])
 
-(defn ->py [a]
-  a #_(cond
-    (type 2)   (py/->py-long a)
-    (type 2.0) (py/->py-float a)
-    :else a))
-
-#_(defn change-array-type! [m]
-  (println m)
-  m
-  #_(let [copy (np/copy m)]
-    (py/set-attr! m :dtype "float64")
-    (np/copyto m copy)))
-
 ;; Binary Operators
 (defn +
   ([a]   (py. a :__pos__))
-  ([a b] (py. a :__add__ (->py b))))
+  ([a b] (py. a :__add__ b)))
 (defn -
   ([a]   (py. a :__neg__))
-  ([a b] (py. a :__sub__ (->py b))))
+  ([a b] (py. a :__sub__ b)))
 (defn *
-  ([a b] (py. (->py a) :__mul__ (->py b))))
+  ([a b] (py. a :__mul__ b)))
 (defn floordiv
-  ([a b] (py. a :__floordiv__ (->py b))))
+  ([a b] (py. a :__floordiv__ b)))
 (defn /
   ([a b] (py. a :__truediv__ b)))
 (defn %
@@ -43,13 +30,13 @@
 
 ;; Extended Assignment
 (defn +=
-  ([a b] (np/add a b :out a :casting "unsafe") #_(py. (change-array-type! a) :__iadd__ b)))
+  ([a b] (np/add a b :out a :casting "unsafe")))
 (defn -=
   ([a b] (py. a :__isub__ b)))
 (defn *=
-  ([a b] (np/multiply a b :out a :casting "unsafe") #_(py. (change-array-type! a) :__imul__ b)))
+  ([a b] (np/multiply a b :out a :casting "unsafe")))
 (defn idiv
-  ([a b] (np/divide a b :out a :casting "unsafe")#_(py. (change-array-type! a) :__itruediv__ b)))
+  ([a b] (np/divide a b :out a :casting "unsafe")))
 (defn ifloordiv
   ([a b] (py. a :__ifloordiv__ b)))
 (defn immul

@@ -5,3 +5,5 @@ node_modules/*
 out/*
 .nrepl-port
 .DS_Store
+*.clj-kondo/*
+!.clj-kondo/config.edn

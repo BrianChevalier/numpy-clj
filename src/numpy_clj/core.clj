@@ -8,7 +8,7 @@
  '[clojure.core.matrix.implementations :as imp]
  '[clojure.core.matrix.protocols :as proto]
  '[clojure.core.protocols :refer [Datafiable]]
- '[libpython-clj.python :refer [py. py.. py.-] :as py]
+ '[libpython-clj.python :refer [py. py.-] :as py]
  '[libpython-clj.require :refer [require-python]]
  '[libpython-clj.python.object :as obj]
  '[numpy-clj.operators :as op])
@@ -74,7 +74,7 @@
   (dimension-count [m dimension-number]
     (case
      (valid-dimension? (py.- m :ndim) dimension-number)
-      true (nth (np/shape m) dimension-number)
+     true (nth (np/shape m) dimension-number)
       false (throw (Exception. (str "Error: dimension out of range " dimension-number)))))
 
   proto/PIndexedAccess

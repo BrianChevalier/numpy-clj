@@ -10,6 +10,10 @@ env:
 test:
 	clojure -M:core-matrix -m numpy-clj.test-runner
 
+lint:
+	clj-kondo --lint src
+	clj-kondo --lint test
+
 target/install-clojure:
 	mkdir -p target
 	curl https://download.clojure.org/install/linux-install-1.10.1.727.sh -o target/install-clojure
@@ -18,11 +22,17 @@ target/install-clojure:
 install/clojure: target/install-clojure
 	sudo ./target/install-clojure
 
-install: install/clojure
+install/lint:
+	curl -sLO https://raw.githubusercontent.com/borkdude/clj-kondo/master/script/install-clj-kondo
+	chmod +x install-clj-kondo
+	./install-clj-kondo
+	rm install-clj-kondo
+
+install: install/clojure install/lint
 
 target: target/install-clojure
 
-ci: install target env test
+ci: install target env lint test
 
 ci/local:
 	act -P ubuntu-latest=nektos/act-environments-ubuntu:18.04
